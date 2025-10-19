@@ -1,7 +1,3 @@
-"""
-Celebrity Face Dataset Pipeline
-Complete pipeline for collecting and processing celebrity face images
-"""
 import os
 import json
 import cv2
@@ -25,33 +21,17 @@ from sklearn.model_selection import train_test_split
 from torch.utils.data import DataLoader
 
 class CelebrityDatasetPipeline:
-    """Complete pipeline for celebrity face dataset creation"""
     def __init__(self):
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         self.celebrities = []
         self.setup_directories()
 
     def setup_directories(self):
-        """Create necessary directories"""
         os.makedirs("celebrity_images", exist_ok=True)
         os.makedirs("face_crops", exist_ok=True)
         os.makedirs("dataset", exist_ok=True)
 
     def select_celebrities(self):
-        """
-        Select celebrities based on criteria.
-        
-        Criteria for selection:
-        1. Popularity: Focus on well-known figures across different domains (actors, singers, politicians, athletes, YouTubers).
-        2. Diversity: Include a mix of nationalities and backgrounds.
-        3. Availability of Data: Prioritize individuals for whom a reasonable number of images can be found online.
-        4. Target Platforms: Consider celebrities likely to be present on VK Video or YouTube.
-        
-        Sources of meta-information: Wikipedia, IMDb, official social media profiles, news articles.
-        
-        This initial selection is a small sample. For a dataset of 1000-5000, a more systematic approach
-        using lists from popular media sites, awards ceremonies, or trending lists would be necessary.
-        """
         self.celebrities = [
             # Actors
             {"id": 1, "name": "Johnny Depp", "category": "actor", "source": "hollywood"},
@@ -83,24 +63,6 @@ class CelebrityDatasetPipeline:
         return self.celebrities
 
     def collect_images(self):
-        """
-        Collect images for all celebrities using bing_image_downloader.
-        
-        Process:
-        - Iterate through the selected celebrities.
-        - For each celebrity, use bing_image_downloader to search for their name.
-        - Download a specified number of images (e.g., 50 per celebrity) to a dedicated directory.
-        - Store a report of the download process, including the number of images collected and the path.
-        
-        Search Queries: The exact name of the celebrity (e.g., "Johnny Depp").
-        Filtering: Basic filtering by file extension (.jpg, .jpeg, .png). bing_image_downloader has its own internal filtering.
-        Limitations:
-        - May download irrelevant images or duplicates.
-        - Quality of downloaded images can vary.
-        - Bing Image Search API limitations (rate limits, search result quality).
-        
-        Chosen number of images: 50 per celebrity as a starting point. This can be adjusted.
-        """
         collection_report = {}
         
         for celeb in tqdm(self.celebrities, desc="Collecting images"):
@@ -139,27 +101,6 @@ class CelebrityDatasetPipeline:
         return collection_report
 
     def detect_and_crop_faces(self, collection_report):
-        """
-        Detect faces in collected images and create crops.
-        
-        Process:
-        - Use MTCNN (Multi-task Cascaded Convolutional Networks) for face detection.
-        - Iterate through the downloaded images for each celebrity.
-        - For each image, detect bounding boxes of faces.
-        - Filter detections based on confidence score (e.g., > 0.9).
-        - Crop the detected face regions.
-        - Save the cropped faces to a dedicated directory for each celebrity.
-        
-        Libraries/Models Used:
-        - MTCNN (from facenet_pytorch): Chosen for its effectiveness in detecting faces with varying poses, scales, and occlusions. It's a standard and robust face detector.
-        - OpenCV (cv2): Used for image manipulation (writing cropped images).
-        - PIL (Pillow): Used for opening and converting images to RGB format.
-        
-        Handling Multiple Faces:
-        - The MTCNN detector can return multiple bounding boxes if several faces are present in an image.
-        - We iterate through all detected boxes and apply a confidence threshold.
-        - Each detected face (above the threshold) is cropped and saved as a separate image. This ensures that even if an image contains multiple people, all detectable faces are captured.
-        """
         # Initialize MTCNN detector on the chosen device
         detector = MTCNN(keep_all=True, thresholds=[0.6, 0.7, 0.7], 
                         min_face_size=20, device=self.device)
@@ -242,21 +183,6 @@ class CelebrityDatasetPipeline:
         return processing_report
 
     def build_dataset(self, processing_report):
-        """
-        Build HuggingFace dataset from processed face crops.
-        
-        Process:
-        - Iterate through the processing report to find all cropped face images.
-        - For each face crop, create a record with:
-            - image_path: Path to the cropped face image.
-            - celebrity_id: Unique ID of the celebrity.
-            - celebrity_name: Name of the celebrity.
-            - category: Category of the celebrity (actor, singer, etc.).
-            - source: Original source of the image.
-            - filename: The name of the cropped image file.
-        - Convert the list of records into a HuggingFace `Dataset`.
-        - Split the dataset into train, validation, and test sets (e.g., 80/10/10) ensuring that splits are stratified by celebrity.
-        """
         dataset_records = []
         MIN_SAMPLES_PER_CELEB = 5
         
@@ -313,25 +239,6 @@ class CelebrityDatasetPipeline:
         return dataset_dict
 
     def evaluate_quality(self, dataset):
-        """
-        Evaluate the quality of the collected face embeddings.
-        
-        Process:
-        - Load a pre-trained face recognition model (InceptionResnetV1 from VGGFace2).
-        - Define image transformations for the model.
-        - Sample a subset of the dataset for evaluation.
-        - Extract face embeddings for each sample.
-        - Visualize the 2D projection of embeddings using UMAP.
-        - Calculate quality metrics: Silhouette Score and Neighbor Accuracy.
-        
-        Chosen Face Recognition Model:
-        - InceptionResnetV1 (pretrained='vggface2') from facenet_pytorch.
-        - Reason: It's a powerful and widely used model for face recognition, trained on a large dataset (VGGFace2), providing good discriminative embeddings.
-        
-        Metrics:
-        - Silhouette Score: Measures how similar an object is to its own cluster compared to other clusters. A higher score indicates better clustering.
-        - Neighbor Accuracy: Calculates the proportion of nearest neighbors in the embedding space that belong to the same celebrity identity. This directly assesses the model's ability to group similar faces.
-        """
         # Load pre-trained face recognition model
         recognizer = InceptionResnetV1(pretrained='vggface2').eval().to(self.device)
         
@@ -433,13 +340,6 @@ class CelebrityDatasetPipeline:
         }
 
     def save_dataset(self, dataset, output_path="celebrity_faces_dataset"):
-        """
-        Save the HuggingFace dataset to disk and create a zip archive.
-        
-        Process:
-        - Use `dataset.save_to_disk()` to save the dataset in a structured format.
-        - Create a zip file containing the saved dataset directory.
-        """
         # Save the dataset to disk
         dataset.save_to_disk(output_path)
         
@@ -458,17 +358,6 @@ class CelebrityDatasetPipeline:
         return zip_filename
 
     def run_pipeline(self):
-        """
-        Run the complete celebrity dataset pipeline.
-        
-        Steps:
-        1. Select celebrities.
-        2. Collect images for each celebrity.
-        3. Detect and crop faces from collected images.
-        4. Build a HuggingFace Dataset.
-        5. Evaluate the quality of the dataset using face embeddings.
-        6. Save the final dataset.
-        """
         print("🎬 Starting Celebrity Dataset Pipeline...")
         
         # 1. Select celebrities
